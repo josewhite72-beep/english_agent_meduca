@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MEDUCA English Planner (Inline Export)</title>
+  <meta name="theme-color" content="#0A7AFE" />
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu; background:#0b0b0b; color:#f0f0f0; margin:0}
+    main{padding:16px; max-width:960px; margin:0 auto}
+    .card{background:#121212; border-radius:12px; padding:16px; box-shadow:0 2px 10px #0006; margin-bottom:12px}
+    label{display:block; margin:8px 0 4px; font-weight:600}
+    input, select, textarea{width:100%; padding:10px; border-radius:8px; border:1px solid #333; background:#1a1a1a; color:#fff}
+    .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px}
+    .actions{display:flex; gap:8px; flex-wrap:wrap}
+    .btn{background:#0A7AFE; color:#fff; border:none; padding:10px 14px; border-radius:10px; font-weight:700; cursor:pointer}
+    .btn.secondary{background:#1f2937}
+    .preview{white-space:pre-wrap; background:#0f1115; color:#e6edf3; padding:12px; border-radius:10px; overflow:auto; max-height:40vh}
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <h1>PWA – MEDUCA English Planner</h1>
+      <p>Versión de prueba con <strong>exportación embebida</strong> (Word/PDF inline) para evitar problemas de rutas/caché.</p>
+    </section>
+
+    <section class="card">
+      <div class="grid">
+        <div>
+          <label>Grade</label>
+          <input id="grade" type="number" min="1" max="6" placeholder="3" />
+        </div>
+        <div>
+          <label>Scenario</label>
+          <select id="scenario"></select>
+        </div>
+        <div>
+          <label>Theme</label>
+          <select id="theme"></select>
+        </div>
+      </div>
+      <label style="margin-top:12px">Context</label>
+      <textarea id="context" rows="3" placeholder="Grupo de primaria panameña."></textarea>
+      <div class="actions" style="margin-top:12px">
+        <button class="btn" id="generate">Generar</button>
+        <button class="btn secondary" id="copyBtn">Copiar Markdown</button>
+        <button class="btn secondary" id="downloadBtn">Descargar .md</button>
+        <button class="btn secondary" id="docBtn">Exportar a Word (.doc)</button>
+        <button class="btn secondary" id="pdfBtn">Exportar a PDF</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Vista previa</h3>
+      <div id="preview" class="preview"></div>
+    </section>
+  </main>
+
+  <script>
+    // --- Scope mínimo para poblar selects ---
+    const SCOPE = {
+      '3': [
+        {scenario:'A Walk in the Neighborhood', themes:['Places I Can Go','A Trip to the Beach']},
+        {scenario:'Exploring My Community', themes:["Let's Go Shopping!",'Time for Exercise']}
+      ]
+    };
+    function populate(){
+      const g = document.getElementById('grade').value || '3';
+      const scen = document.getElementById('scenario');
+      const them = document.getElementById('theme');
+      scen.innerHTML=''; them.innerHTML='';
+      (SCOPE[g]||[]).forEach(i=>{ const o=document.createElement('option'); o.value=i.scenario; o.textContent=i.scenario; scen.appendChild(o); });
+      const found = (SCOPE[g]||[])[0];
+      (found?.themes||[]).forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=t; them.appendChild(o); });
+    }
+
+    // --- Generador mínimo ---
+    function generateMarkdown(){
+      const grade = document.getElementById('grade').value||'3';
+      const scenario = document.getElementById('scenario').value||'A Walk in the Neighborhood';
+      const theme = document.getElementById('theme').value||'Places I Can Go';
+      const context = document.getElementById('context').value||'Grupo de primaria panameña; recursos básicos.';
+      const md = `# MEDUCA English Planning (${grade})\n\n## 2. Curricular Focus\n- **Scenario:** ${scenario}\n- **Theme:** ${theme}\n\n## 3. Context\n${context}\n\n`;
+      document.getElementById('preview').textContent = md;
+      return md;
+    }
+
+    // --- Exportar a Word (.doc) inline ---
+    function mdToHtml(md){
+      const esc = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+      const lines = md.split('\n'); let inList=false; const out=[];
+      for(const line of lines){
+        if(line.startsWith('# ')) { if(inList){out.push('</ul>'); inList=false;} out.push(`<h1>${esc(line.replace('# ',''))}</h1>`); }
+        else if(line.startsWith('## ')) { if(inList){out.push('</ul>'); inList=false;} out.push(`<h2>${esc(line.replace('## ',''))}</h2>`); }
+        else if(line.startsWith('### ')) { if(inList){out.push('</ul>'); inList=false;} out.push(`<h3>${esc(line.replace('### ',''))}</h3>`); }
+        else if(line.startsWith('- ')) { if(!inList){out.push('<ul>'); inList=true;} out.push(`<li>${esc(line.replace('- ',''))}</li>`); }
+        else if(line.trim()==='') { if(inList){out.push('</ul>'); inList=false;} out.push('<br/>'); }
+        else { if(inList){out.push('</ul>'); inList=false;} out.push(`<p>${esc(line)}</p>`); }
+      }
+      if(inList){ out.push('</ul>'); }
+      return out.join('\n');
+    }
+    function exportToDoc(){
+      const md = generateMarkdown();
+      const htmlContent = mdToHtml(md);
+      const html = `<!DOCTYPE html><html><head><meta charset=\"utf-8\">\n`
+        + `<style>body{font-family:Calibri,Arial,sans-serif} h1{font-size:20pt} h2{font-size:16pt} h3{font-size:13pt} p,li{font-size:11pt} ul{margin:6px 0 12px 18px}</style>`
+        + `</head><body>${htmlContent}</body></html>`;
+      const blob = new Blob([html], {type:'application/msword'});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'plan_meduca_english.doc'; a.click(); URL.revokeObjectURL(a.href);
+    }
+
+    // --- Exportar a PDF inline (misma pestaña) ---
+    function mdToPrintableHtml(md){
+      const esc = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+      const lines = md.split('\n');
+      const body = lines.map(line => {
+        if(line.startsWith('# ')) return `<h1>${esc(line.replace('# ', ''))}</h1>`;
+        if(line.startsWith('## ')) return `<h2>${esc(line.replace('## ', ''))}</h2>`;
+        if(line.startsWith('### ')) return `<h3>${esc(line.replace('### ', ''))}</h3>`;
+        if(line.startsWith('- ')) return `<li>${esc(line.replace('- ', ''))}</li>`;
+        if(line.trim()==='') return '<br/>';
+        return `<p>${esc(line)}</p>`;
+      }).join('\n');
+      const html = `<!DOCTYPE html><html><head><meta charset='utf-8'>\n`+
+        `<title>Plan MEDUCA – PDF</title>\n`+
+        `<style> @page{margin:20mm} body{font-family:Calibri,Arial,sans-serif} h1{font-size:18pt} h2{font-size:14pt} h3{font-size:12pt} p,li{font-size:11pt} ul{margin:6px 0 12px 18px} </style>`+
+        `</head><body>${body}</body></html>`;
+      return html;
+    }
+    function exportToPDF(){
+      const md = generateMarkdown();
+      const html = mdToPrintableHtml(md);
+      const w = window; w.document.open('text/html','replace'); w.document.write(html); w.document.close(); setTimeout(()=>{ w.print(); }, 250);
+    }
+
+    // --- Botones ---
+    document.getElementById('generate').addEventListener('click', ()=> generateMarkdown());
+    document.getElementById('copyBtn').addEventListener('click', async ()=>{ const md = generateMarkdown(); try{ await navigator.clipboard.writeText(md); alert('Markdown copiado'); }catch(e){ alert('No se pudo copiar'); }});
+    document.getElementById('downloadBtn').addEventListener('click', ()=>{ const md = generateMarkdown(); const blob = new Blob([md], {type:'text/markdown'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='plan_meduca_english.md'; a.click(); URL.revokeObjectURL(a.href); });
+    document.getElementById('docBtn').addEventListener('click', exportToDoc);
+    document.getElementById('pdfBtn').addEventListener('click', exportToPDF);
+
+    // Inicializar
+    window.addEventListener('DOMContentLoaded', ()=>{ document.getElementById('grade').value='3'; populate(); generateMarkdown(); });
+  </script>
+</body>
+</html>
